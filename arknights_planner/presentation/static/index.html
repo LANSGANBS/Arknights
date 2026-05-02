@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>明日方舟素材均衡规划器</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+
+<body>
+    <div class="background-stage" aria-hidden="true">
+        <div id="bgSlideA" class="bg-slide is-active"></div>
+        <div id="bgSlideB" class="bg-slide"></div>
+        <div class="bg-overlay"></div>
+    </div>
+    <div class="app-shell">
+        <header class="top-bar panel">
+            <div class="title-block">
+                <p class="eyebrow">Arknights Material Balance</p>
+                <h1>明日方舟素材均衡规划器</h1>
+            </div>
+            <div class="toolbar">
+                <div class="toolbar-toggle-wrap">
+                    <label class="weight-toggle">
+                        <input id="useCustomWeights" type="checkbox" />
+                        <span>启用权重模式</span>
+                    </label>
+                </div>
+                <div class="toolbar-actions">
+                    <button id="loadButton" class="action-button">导入</button>
+                    <button id="exportButton" class="action-button action-button-accent">导出</button>
+                    <button id="resetButton" class="action-button action-button-muted">重置</button>
+                    <button id="analyzeButton" class="action-button action-button-primary">计算规划</button>
+                </div>
+            </div>
+        </header>
+
+        <main class="content-stack">
+            <section class="panel control-strip is-empty" id="statusPanel">
+                <div class="status-wrap">
+                    <p class="status-line" id="statusLine"></p>
+                </div>
+            </section>
+
+            <section class="panel result-panel">
+                <div class="panel-header split result-header">
+                    <div class="section-copy result-copy">
+                        <div class="result-title-row">
+                            <h2>最缺少的蓝色素材</h2>
+                            <div class="result-links">
+                                <a class="result-link" href="https://ark.yituliu.cn/" target="_blank"
+                                    rel="noreferrer">掉落推荐关卡</a>
+                                <a class="result-link" href="https://ark.yituliu.cn/material/value" target="_blank"
+                                    rel="noreferrer">权重下载</a>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="toggleRankingButton" class="action-button action-button-muted result-toggle is-hidden"
+                        type="button">展开完整排序</button>
+                </div>
+                <div id="resultCards" class="result-cards"></div>
+            </section>
+
+            <section class="panel inventory-panel">
+                <div class="panel-header split">
+                    <div class="section-copy">
+                        <h2>全部素材</h2>
+                    </div>
+                    <div class="search-wrap">
+                        <input id="materialSearch" class="search" placeholder="搜索素材名或 ID" />
+                    </div>
+                </div>
+                <div id="inventoryGrid" class="inventory-grid"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/assets/app.js"></script>
+</body>
+
+</html>

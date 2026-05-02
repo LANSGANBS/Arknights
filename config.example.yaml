@@ -1,0 +1,11 @@
+# 复制为 config.yaml 后按需修改
+input_path: data/import.json
+output_path: data/export.json
+weight_path: data/weight.json
+material_image_dir: assets/materials
+background_image_dir: assets/backgrounds
+top_n: 5
+use_custom_weights: false
+host: 127.0.0.1
+port: 8765
+open_browser: true
