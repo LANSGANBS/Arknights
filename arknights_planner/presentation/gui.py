@@ -9,12 +9,12 @@ except ModuleNotFoundError:
     TK_AVAILABLE = False
 
 from arknights_planner.application.planning_service import PlannerError, run_cli
-from arknights_planner.infrastructure.config import load_app_config
+from arknights_planner.infrastructure.config import load_app_config, resolve_config_path
 from arknights_planner.infrastructure.json_storage import (
     document_to_inventory,
     export_inventory_document,
     load_inventory_document,
-    load_weight_profile,
+    load_optional_weight_profile,
 )
 from arknights_planner.infrastructure.material_catalog import BLUE_MATERIAL_IDS
 
@@ -27,13 +27,15 @@ class PlannerGui:
         self.root.title("明日方舟素材均衡规划器")
         self.root.geometry("1160x760")
 
-        project_root = Path(__file__).resolve().parents[2]
-        app_config = load_app_config(project_root / "config.yaml")
+        self.project_root = Path(__file__).resolve().parents[2]
+        self.config_path = self.project_root / "config.yaml"
+        self.config_dir = self.config_path.parent
+        app_config = load_app_config(self.config_path)
 
-        self.input_path = StringVar(value=app_config.input_path)
-        self.output_path = StringVar(value=app_config.output_path)
-        self.weight_path = StringVar(value=app_config.weight_path)
-        self.weight_mode = StringVar(value=app_config.weight_mode)
+        self.material_image_dir = resolve_config_path(self.config_dir, app_config.material_image_dir)
+        self.input_path = StringVar(value=str(resolve_config_path(self.config_dir, app_config.input_path)))
+        self.output_path = StringVar(value=str(resolve_config_path(self.config_dir, app_config.output_path)))
+        self.weight_path = StringVar(value=str(resolve_config_path(self.config_dir, app_config.weight_path)))
         self.top_n = StringVar(value=str(app_config.top_n))
         self.status = StringVar(value="准备就绪")
 
@@ -43,6 +45,9 @@ class PlannerGui:
 
         self._build_layout()
         self._load_preview_image()
+
+    def _runtime_path(self, raw_path: str) -> Path:
+        return resolve_config_path(self.config_dir, raw_path)
 
     def _build_layout(self) -> None:
         root_frame = ttk.Frame(self.root, padding=16)
@@ -55,11 +60,8 @@ class PlannerGui:
         self._add_file_row(control_frame, 1, "导出文件", self.output_path, self._choose_output)
         self._add_file_row(control_frame, 2, "权重文件", self.weight_path, self._choose_weight)
 
-        ttk.Label(control_frame, text="权重模式").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=8)
-        ttk.Combobox(control_frame, textvariable=self.weight_mode, values=["equal", "custom"], state="readonly", width=16).grid(row=3, column=1, sticky="w", pady=8)
-
-        ttk.Label(control_frame, text="输出数量").grid(row=3, column=2, sticky="w", padx=(16, 8), pady=8)
-        ttk.Entry(control_frame, textvariable=self.top_n, width=8).grid(row=3, column=3, sticky="w", pady=8)
+        ttk.Label(control_frame, text="输出数量").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=8)
+        ttk.Entry(control_frame, textvariable=self.top_n, width=8).grid(row=3, column=1, sticky="w", pady=8)
 
         action_frame = ttk.Frame(control_frame)
         action_frame.grid(row=4, column=0, columnspan=4, sticky="w", pady=(12, 0))
@@ -94,7 +96,7 @@ class PlannerGui:
         right_frame = ttk.LabelFrame(content_frame, text="图片预留", padding=12)
         right_frame.pack(side=RIGHT, fill=Y, padx=(16, 0))
 
-        self.image_label = ttk.Label(right_frame, text="picture 目录中放入 PNG/GIF 后会显示在这里。", width=36, anchor="center", justify="center")
+        self.image_label = ttk.Label(right_frame, text="会从素材图片目录加载一张 PNG/GIF 作为预览。", width=36, anchor="center", justify="center")
         self.image_label.pack(side=TOP, fill=BOTH, expand=True)
 
         ttk.Label(root_frame, textvariable=self.status).pack(fill=X, pady=(12, 0))
@@ -121,22 +123,24 @@ class PlannerGui:
             self.weight_path.set(path)
 
     def _load_preview_image(self) -> None:
-        picture_dir = Path.cwd() / "picture"
+        picture_dir = self.material_image_dir
         candidates = []
         if picture_dir.exists():
             for suffix in ("*.png", "*.gif"):
                 candidates.extend(sorted(picture_dir.glob(suffix)))
         if not candidates:
+            self.image_label.configure(text=f"未在 {picture_dir} 找到可预览的 PNG/GIF 素材图。")
             return
         try:
             self.image_ref = PhotoImage(file=str(candidates[0]))
         except Exception:
+            self.image_label.configure(text=f"无法预览 {candidates[0].name}，请改用 PNG/GIF。")
             return
         self.image_label.configure(image=self.image_ref, text="")
 
     def load_inventory(self) -> None:
         try:
-            self.current_document = load_inventory_document(self.input_path.get())
+            self.current_document = load_inventory_document(self._runtime_path(self.input_path.get()))
             self.current_inventory = document_to_inventory(self.current_document)
             self.status.set(f"已导入 {len(self.current_inventory)} 个素材条目")
         except (FileNotFoundError, OSError, ValueError) as exc:
@@ -146,14 +150,11 @@ class PlannerGui:
         try:
             if not self.current_inventory:
                 self.load_inventory()
-            weights = None
-            if self.weight_mode.get() == "custom":
-                weights = load_weight_profile(self.weight_path.get(), set(BLUE_MATERIAL_IDS))
+            weights = load_optional_weight_profile(self._runtime_path(self.weight_path.get()), set(BLUE_MATERIAL_IDS))
             result = run_cli(
                 inventory=self.current_inventory,
                 top_n=int(self.top_n.get()),
                 weights=weights,
-                weight_mode=self.weight_mode.get(),
             )
         except (PlannerError, FileNotFoundError, OSError, ValueError) as exc:
             messagebox.showerror("分析失败", str(exc))
@@ -163,16 +164,19 @@ class PlannerGui:
             self.tree.delete(child)
 
         for item in result.shortages:
-            weighted_display = f"{item.weighted_equivalent:.2f}" if result.weight_mode == "custom" else "-"
+            weighted_display = f"{item.weighted_equivalent:.2f}" if result.has_weights else "-"
             self.tree.insert("", END, values=(item.rank, item.item_id, item.name, f"{item.blue_equivalent:.2f}", weighted_display))
 
-        self.status.set(f"分析完成，当前权重模式: {result.weight_mode}")
+        if result.has_weights:
+            self.status.set(f"分析完成，已读取权重文件 {self.weight_path.get()}")
+        else:
+            self.status.set("分析完成，未读取到权重文件，结果按蓝材等效库存展示")
 
     def export_inventory(self) -> None:
         try:
             if not self.current_inventory:
                 self.load_inventory()
-            export_inventory_document(self.output_path.get(), inventory=self.current_inventory, template=self.current_document)
+            export_inventory_document(self._runtime_path(self.output_path.get()), inventory=self.current_inventory, template=self.current_document)
             self.status.set(f"已导出到 {self.output_path.get()}")
         except (FileNotFoundError, OSError, ValueError) as exc:
             messagebox.showerror("导出失败", str(exc))

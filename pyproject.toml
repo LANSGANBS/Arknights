@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arknights-planner"
+version = "0.1.0"
+description = "明日方舟素材均衡规划器 - 帮助玩家找出当前仓库最缺少的蓝色素材"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "LANSGANBS", email = ""}
+]
+keywords = ["arknights", "planner", "material", "game"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: Chinese (Simplified)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Games/Entertainment",
+]
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/LANSGANBS/Arknights"
+Repository = "https://github.com/LANSGANBS/Arknights.git"
+Issues = "https://github.com/LANSGANBS/Arknights/issues"
+
+[tool.setuptools]
+packages = ["arknights_planner"]
+
+[tool.setuptools.package-data]
+arknights_planner = ["py.typed"]
+
+[tool.black]
+line-length = 120
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+select = ["E", "F", "W", "I"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false

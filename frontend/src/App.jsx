@@ -72,13 +72,13 @@ function LiquidAction({ className = "", onClick, children, mouseContainerRef }) 
 
 export default function App() {
     const mouseContainerRef = useRef(null);
+    const backgroundIndexRef = useRef(0);
     const [originalDocument, setOriginalDocument] = useState(EMPTY_DOCUMENT);
     const [inventory, setInventory] = useState({});
     const [materials, setMaterials] = useState([]);
     const [result, setResult] = useState(null);
     const [fullResult, setFullResult] = useState(null);
     const [showFullRanking, setShowFullRanking] = useState(false);
-    const [useCustomWeights, setUseCustomWeights] = useState(false);
     const [outputPath, setOutputPath] = useState("data/export.json");
     const [backgroundImages, setBackgroundImages] = useState([]);
     const [backgroundState, setBackgroundState] = useState({ active: 0, indexes: [0, 0] });
@@ -104,7 +104,8 @@ export default function App() {
     }, [materials, deferredSearchText]);
 
     const canExpand = (fullResult?.shortages?.length || 0) > (result?.shortages?.length || 0);
-    const visibleShortages = showFullRanking && fullResult ? fullResult.shortages : result?.shortages || [];
+    const activeResult = showFullRanking && fullResult ? fullResult : result;
+    const visibleShortages = activeResult?.shortages || [];
 
     useEffect(() => {
         const load = async () => {
@@ -116,7 +117,6 @@ export default function App() {
                 setMaterials(payload.materials || []);
                 setResult(payload.result || null);
                 setFullResult(payload.fullResult || payload.result || null);
-                setUseCustomWeights(Boolean(payload.useCustomWeights));
                 setOutputPath(payload.outputPath || "data/export.json");
                 setBackgroundImages(payload.backgroundImages || []);
                 setShowFullRanking(false);
@@ -130,22 +130,82 @@ export default function App() {
 
     useEffect(() => {
         setBackgroundState({ active: 0, indexes: [0, 0] });
-        if (backgroundImages.length <= 1) {
+        backgroundIndexRef.current = 0;
+        if (backgroundImages.length === 0) {
             return undefined;
         }
 
-        const timer = window.setInterval(() => {
+        let timer = null;
+        let cancelled = false;
+
+        const preloadImage = (imageUrl) =>
+            new Promise((resolve) => {
+                if (!imageUrl) {
+                    resolve(false);
+                    return;
+                }
+                const image = new window.Image();
+                let finished = false;
+                const complete = (success) => {
+                    if (finished) {
+                        return;
+                    }
+                    finished = true;
+                    resolve(success);
+                };
+                image.onload = () => complete(true);
+                image.onerror = () => complete(false);
+                image.src = imageUrl;
+                if (image.complete && image.naturalWidth > 0) {
+                    complete(true);
+                }
+            });
+
+        const showBackground = async (nextIndex, firstPaint = false) => {
+            const imageUrl = backgroundImages[nextIndex];
+            const loaded = await preloadImage(imageUrl);
+            if (!loaded || cancelled) {
+                return false;
+            }
             setBackgroundState((prev) => {
+                if (firstPaint) {
+                    return { active: 0, indexes: [nextIndex, nextIndex] };
+                }
                 const nextActive = prev.active === 0 ? 1 : 0;
-                const currentIndex = prev.indexes[prev.active];
-                const nextIndex = (currentIndex + 1) % backgroundImages.length;
                 const nextIndexes = [...prev.indexes];
                 nextIndexes[nextActive] = nextIndex;
                 return { active: nextActive, indexes: nextIndexes };
             });
-        }, 16000);
+            return true;
+        };
 
-        return () => window.clearInterval(timer);
+        const scheduleNext = () => {
+            if (backgroundImages.length <= 1 || cancelled) {
+                return;
+            }
+            timer = window.setTimeout(async () => {
+                const nextIndex = (backgroundIndexRef.current + 1) % backgroundImages.length;
+                const switched = await showBackground(nextIndex);
+                if (switched) {
+                    backgroundIndexRef.current = nextIndex;
+                }
+                scheduleNext();
+            }, 16000);
+        };
+
+        void showBackground(0, true).then((switched) => {
+            if (switched) {
+                backgroundIndexRef.current = 0;
+            }
+            scheduleNext();
+        });
+
+        return () => {
+            cancelled = true;
+            if (timer !== null) {
+                window.clearTimeout(timer);
+            }
+        };
     }, [backgroundImages]);
 
     const analyze = async () => {
@@ -154,7 +214,7 @@ export default function App() {
             const payload = await requestJson("/api/analyze", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ inventory, useCustomWeights }),
+                body: JSON.stringify({ inventory }),
             });
             setResult(payload.result || null);
             setFullResult(payload.fullResult || payload.result || null);
@@ -173,7 +233,6 @@ export default function App() {
             setMaterials(payload.materials || []);
             setResult(payload.result || null);
             setFullResult(payload.fullResult || payload.result || null);
-            setUseCustomWeights(Boolean(payload.useCustomWeights));
             setOutputPath(payload.outputPath || "data/export.json");
             setBackgroundImages(payload.backgroundImages || []);
             setShowFullRanking(false);
@@ -265,11 +324,6 @@ export default function App() {
                         </div>
 
                         <div className="hero-controls">
-                            <label className="weight-toggle">
-                                <input type="checkbox" checked={useCustomWeights} onChange={(event) => setUseCustomWeights(event.target.checked)} />
-                                <span>启用权重模式</span>
-                            </label>
-
                             <div className="action-grid">
                                 <LiquidAction mouseContainerRef={mouseContainerRef} onClick={() => openConfirmation("import")}>导入</LiquidAction>
                                 <LiquidAction mouseContainerRef={mouseContainerRef} className="liquid-button--accent" onClick={() => openConfirmation("export")}>导出</LiquidAction>
@@ -319,7 +373,7 @@ export default function App() {
                         <div className="result-grid">
                             {visibleShortages.map((item) => {
                                 const material = materialMap[item.item_id];
-                                const weighted = (showFullRanking && fullResult ? fullResult.weightMode : result?.weightMode) === "custom"
+                                const weighted = activeResult?.hasWeights
                                     ? item.weighted_equivalent.toFixed(2)
                                     : "-";
 

@@ -63,6 +63,14 @@ def load_weight_profile(weight_path: str | Path, material_ids: set[str]) -> dict
     return weights
 
 
+def load_optional_weight_profile(weight_path: str | Path, material_ids: set[str]) -> dict[str, float] | None:
+    try:
+        weights = load_weight_profile(weight_path, material_ids)
+    except FileNotFoundError:
+        return None
+    return weights or None
+
+
 def build_inventory_document(inventory: dict[str, int], template: dict[str, object] | None = None) -> dict[str, object]:
     base = deepcopy(template) if template else {
         "@type": "@penguin-statistics/planner/config",

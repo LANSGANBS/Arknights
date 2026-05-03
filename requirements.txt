@@ -1,0 +1,16 @@
+# 明日方舟素材均衡规划器 - Python 依赖
+# 
+# 本项目仅使用 Python 标准库，无外部依赖
+# 
+# 最低要求: Python 3.10+
+# 
+# 前端构建需要: Node.js 18+ 和 npm
+#
+# 安装方式:
+#   pip install -r requirements.txt
+#
+# 或使用虚拟环境:
+#   python -m venv venv
+#   source venv/bin/activate  # Linux/macOS
+#   venv\Scripts\activate     # Windows
+#   pip install -r requirements.txt

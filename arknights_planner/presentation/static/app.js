@@ -17,7 +17,6 @@ const state = {
 const elements = {
     bgSlideA: document.getElementById("bgSlideA"),
     bgSlideB: document.getElementById("bgSlideB"),
-    useCustomWeights: document.getElementById("useCustomWeights"),
     statusPanel: document.getElementById("statusPanel"),
     statusLine: document.getElementById("statusLine"),
     resultCards: document.getElementById("resultCards"),
@@ -156,7 +155,7 @@ function renderResult() {
     elements.resultCards.innerHTML = "";
     for (const item of result.shortages) {
         const material = state.materialMap[item.item_id];
-        const weighted = result.weightMode === "custom" ? item.weighted_equivalent.toFixed(2) : "-";
+        const weighted = result.hasWeights ? item.weighted_equivalent.toFixed(2) : "-";
         const card = document.createElement("article");
         card.className = "result-card";
         card.innerHTML = `
@@ -238,7 +237,6 @@ async function bootstrap() {
     state.fullResult = payload.fullResult || payload.result;
     state.showFullRanking = false;
     startBackgroundRotation(payload.backgroundImages || []);
-    elements.useCustomWeights.checked = Boolean(payload.useCustomWeights);
     renderInventory();
     renderResult();
     clearStatus();
@@ -249,10 +247,7 @@ async function analyze() {
     const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            inventory: inventoryObject(),
-            useCustomWeights: elements.useCustomWeights.checked,
-        }),
+        body: JSON.stringify({ inventory: inventoryObject() }),
     });
     const payload = await response.json();
     if (!response.ok) {

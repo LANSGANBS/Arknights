@@ -18,7 +18,7 @@ class InventoryPlanner:
         self.crafting_rules = CRAFTING_RULES
         self.upgrade_rules = UPGRADE_RULES
 
-    def plan(self, inventory: dict[str, int], top_n: int = 5, weights: dict[str, float] | None = None, weight_mode: str = "equal") -> PlanResult:
+    def plan(self, inventory: dict[str, int], top_n: int = 5, weights: dict[str, float] | None = None) -> PlanResult:
         unknown = sorted(item_id for item_id in inventory if item_id not in self.materials)
         blue_totals: dict[str, float] = {item_id: 0.0 for item_id in self.blue_material_ids}
         for item_id, count in inventory.items():
@@ -28,7 +28,7 @@ class InventoryPlanner:
             for blue_item_id, blue_count in normalized.items():
                 blue_totals[blue_item_id] += count * blue_count
 
-        weight_factors = self._resolve_weight_factors(weights)
+        weight_factors, has_weights = self._resolve_weight_factors(weights)
         shortages = []
         for blue_item_id, equivalent_count in blue_totals.items():
             factor = weight_factors[blue_item_id]
@@ -55,7 +55,7 @@ class InventoryPlanner:
             )
             for index, item in enumerate(shortages[:top_n], start=1)
         ]
-        return PlanResult(weight_mode=weight_mode, shortages=ranked, unknown_item_ids=unknown)
+        return PlanResult(has_weights=has_weights, shortages=ranked, unknown_item_ids=unknown)
 
     @lru_cache(maxsize=None)
     def _normalize_pairs(self, item_id: str) -> tuple[tuple[str, float], ...]:
@@ -83,20 +83,20 @@ class InventoryPlanner:
     def normalize_to_blue(self, item_id: str) -> dict[str, float]:
         return dict(self._normalize_pairs(item_id))
 
-    def _resolve_weight_factors(self, weights: dict[str, float] | None) -> dict[str, float]:
+    def _resolve_weight_factors(self, weights: dict[str, float] | None) -> tuple[dict[str, float], bool]:
         if not weights:
-            return {item_id: 1.0 for item_id in self.blue_material_ids}
+            return {item_id: 1.0 for item_id in self.blue_material_ids}, False
 
         selected = {item_id: value for item_id, value in weights.items() if item_id in self.blue_material_ids and value > 0}
         if not selected:
-            return {item_id: 1.0 for item_id in self.blue_material_ids}
+            return {item_id: 1.0 for item_id in self.blue_material_ids}, False
 
         baseline = mean(selected.values())
         factors = {item_id: 1.0 for item_id in self.blue_material_ids}
         for item_id, value in selected.items():
             factors[item_id] = value / baseline
-        return factors
+        return factors, True
 
 
-def run_cli(inventory: dict[str, int], top_n: int = 5, weights: dict[str, float] | None = None, weight_mode: str = "equal") -> PlanResult:
-    return InventoryPlanner().plan(inventory=inventory, top_n=top_n, weights=weights, weight_mode=weight_mode)
+def run_cli(inventory: dict[str, int], top_n: int = 5, weights: dict[str, float] | None = None) -> PlanResult:
+    return InventoryPlanner().plan(inventory=inventory, top_n=top_n, weights=weights)

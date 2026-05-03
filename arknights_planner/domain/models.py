@@ -18,13 +18,13 @@ class ShortageRecord:
 
 @dataclass(frozen=True)
 class PlanResult:
-    weight_mode: str
+    has_weights: bool
     shortages: list[ShortageRecord]
     unknown_item_ids: list[str]
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "weightMode": self.weight_mode,
+            "hasWeights": self.has_weights,
             "shortages": [item.to_dict() for item in self.shortages],
             "unknownItemIds": self.unknown_item_ids,
         }
