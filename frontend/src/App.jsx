@@ -1,12 +1,11 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import LiquidGlass from "liquid-glass-react";
+import defaultWeightEntries from "../../data/weight.json";
+import { BACKGROUND_IMAGES, MATERIAL_IMAGE_MAP } from "./assets";
+import { buildInventoryDocument, EMPTY_DOCUMENT, parseInventoryFile, parseWeightEntries, parseWeightFile, planInventory } from "./planner";
+import { BLUE_MATERIAL_IDS, MATERIAL_LIST } from "./plannerData";
 
-const EMPTY_DOCUMENT = {
-    "@type": "@penguin-statistics/planner/config",
-    items: [],
-    options: {},
-    excludes: [],
-};
+const DEFAULT_TOP_N = 5;
 
 const BUTTON_GLASS = {
     mode: "prominent",
@@ -21,30 +20,17 @@ const BUTTON_GLASS = {
 };
 
 const CONFIRMATION_COPY = {
-    import: {
-        title: "确认导入",
-        description: "这会重新读取当前配置里的库存文件，并覆盖页面上已经修改但尚未导出的数量。",
-        confirmText: "确认导入",
-    },
-    export: {
-        title: "确认导出",
-        description: "这会把当前页面上的库存数量写回导出文件。",
-        confirmText: "确认导出",
-    },
     reset: {
         title: "确认重置",
-        description: "这会把当前页面上的数量恢复为最近一次导入时的原始值。",
+        description: "这会把当前页面上的所有素材数量直接清零。",
         confirmText: "确认重置",
     },
 };
 
-async function requestJson(url, options) {
-    const response = await fetch(url, options);
-    const payload = await response.json();
-    if (!response.ok) {
-        throw new Error(payload.error || "请求失败");
-    }
-    return payload;
+function createPlanState(inventory, weights) {
+    const result = planInventory(inventory, { topN: DEFAULT_TOP_N, weights });
+    const fullResult = planInventory(inventory, { topN: BLUE_MATERIAL_IDS.length, weights });
+    return { result, fullResult };
 }
 
 function MaterialImage({ material, className }) {
@@ -70,27 +56,57 @@ function LiquidAction({ className = "", onClick, children, mouseContainerRef }) 
     );
 }
 
+async function readSelectedFile(event) {
+    const file = event.target.files?.[0] || null;
+    event.target.value = "";
+    if (!file) {
+        return null;
+    }
+    return {
+        file,
+        text: await file.text(),
+    };
+}
+
+function downloadJson(jsonDocument, fileName) {
+    const blob = new Blob([JSON.stringify(jsonDocument, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = window.document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    window.document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+}
+
 export default function App() {
     const mouseContainerRef = useRef(null);
+    const inventoryInputRef = useRef(null);
+    const weightInputRef = useRef(null);
     const backgroundIndexRef = useRef(0);
+
+    const defaultWeights = useMemo(() => parseWeightEntries(defaultWeightEntries), []);
+    const initialPlan = useMemo(() => createPlanState({}, defaultWeights), [defaultWeights]);
     const [originalDocument, setOriginalDocument] = useState(EMPTY_DOCUMENT);
     const [inventory, setInventory] = useState({});
-    const [materials, setMaterials] = useState([]);
-    const [result, setResult] = useState(null);
-    const [fullResult, setFullResult] = useState(null);
+    const [weights, setWeights] = useState(defaultWeights);
+    const [inventoryFileName, setInventoryFileName] = useState("");
+    const [weightFileName, setWeightFileName] = useState("内置默认权重");
+    const [result, setResult] = useState(initialPlan.result);
+    const [fullResult, setFullResult] = useState(initialPlan.fullResult);
     const [showFullRanking, setShowFullRanking] = useState(false);
-    const [outputPath, setOutputPath] = useState("data/export.json");
-    const [backgroundImages, setBackgroundImages] = useState([]);
     const [backgroundState, setBackgroundState] = useState({ active: 0, indexes: [0, 0] });
     const [searchText, setSearchText] = useState("");
-    const [statusText, setStatusText] = useState("");
     const [pendingAction, setPendingAction] = useState(null);
     const deferredSearchText = useDeferredValue(searchText);
 
-    const materialMap = useMemo(
-        () => Object.fromEntries(materials.map((material) => [material.id, material])),
-        [materials]
+    const materials = useMemo(
+        () => MATERIAL_LIST.map((material) => ({ ...material, imageUrl: MATERIAL_IMAGE_MAP[material.name] || null })),
+        []
     );
+
+    const materialMap = useMemo(() => Object.fromEntries(materials.map((material) => [material.id, material])), [materials]);
 
     const filteredMaterials = useMemo(() => {
         const keyword = deferredSearchText.trim().toLowerCase();
@@ -98,8 +114,7 @@ export default function App() {
             return materials;
         }
         return materials.filter(
-            (material) =>
-                material.name.toLowerCase().includes(keyword) || material.id.toLowerCase().includes(keyword)
+            (material) => material.name.toLowerCase().includes(keyword) || material.id.toLowerCase().includes(keyword)
         );
     }, [materials, deferredSearchText]);
 
@@ -108,30 +123,9 @@ export default function App() {
     const visibleShortages = activeResult?.shortages || [];
 
     useEffect(() => {
-        const load = async () => {
-            try {
-                setStatusText("");
-                const payload = await requestJson("/api/bootstrap");
-                setOriginalDocument(payload.document || EMPTY_DOCUMENT);
-                setInventory(payload.inventory || {});
-                setMaterials(payload.materials || []);
-                setResult(payload.result || null);
-                setFullResult(payload.fullResult || payload.result || null);
-                setOutputPath(payload.outputPath || "data/export.json");
-                setBackgroundImages(payload.backgroundImages || []);
-                setShowFullRanking(false);
-            } catch (error) {
-                setStatusText(error.message || "初始化失败");
-            }
-        };
-
-        load();
-    }, []);
-
-    useEffect(() => {
         setBackgroundState({ active: 0, indexes: [0, 0] });
         backgroundIndexRef.current = 0;
-        if (backgroundImages.length === 0) {
+        if (BACKGROUND_IMAGES.length === 0) {
             return undefined;
         }
 
@@ -162,8 +156,7 @@ export default function App() {
             });
 
         const showBackground = async (nextIndex, firstPaint = false) => {
-            const imageUrl = backgroundImages[nextIndex];
-            const loaded = await preloadImage(imageUrl);
+            const loaded = await preloadImage(BACKGROUND_IMAGES[nextIndex]);
             if (!loaded || cancelled) {
                 return false;
             }
@@ -180,11 +173,11 @@ export default function App() {
         };
 
         const scheduleNext = () => {
-            if (backgroundImages.length <= 1 || cancelled) {
+            if (BACKGROUND_IMAGES.length <= 1 || cancelled) {
                 return;
             }
             timer = window.setTimeout(async () => {
-                const nextIndex = (backgroundIndexRef.current + 1) % backgroundImages.length;
+                const nextIndex = (backgroundIndexRef.current + 1) % BACKGROUND_IMAGES.length;
                 const switched = await showBackground(nextIndex);
                 if (switched) {
                     backgroundIndexRef.current = nextIndex;
@@ -206,61 +199,70 @@ export default function App() {
                 window.clearTimeout(timer);
             }
         };
-    }, [backgroundImages]);
+    }, []);
 
-    const analyze = async () => {
+    const applyPlan = (nextInventory, nextWeights) => {
+        const nextPlan = createPlanState(nextInventory, nextWeights);
+        setResult(nextPlan.result);
+        setFullResult(nextPlan.fullResult);
+        setShowFullRanking(false);
+    };
+
+    const analyze = () => {
         try {
-            setStatusText("");
-            const payload = await requestJson("/api/analyze", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ inventory }),
-            });
-            setResult(payload.result || null);
-            setFullResult(payload.fullResult || payload.result || null);
-            setShowFullRanking(false);
+            applyPlan(inventory, weights);
         } catch (error) {
-            setStatusText(error.message || "分析失败");
+            window.alert(error.message || "分析失败");
         }
     };
 
-    const reloadInventory = async () => {
+    const importInventory = async (event) => {
         try {
-            setStatusText("");
-            const payload = await requestJson("/api/bootstrap");
-            setOriginalDocument(payload.document || EMPTY_DOCUMENT);
-            setInventory(payload.inventory || {});
-            setMaterials(payload.materials || []);
-            setResult(payload.result || null);
-            setFullResult(payload.fullResult || payload.result || null);
-            setOutputPath(payload.outputPath || "data/export.json");
-            setBackgroundImages(payload.backgroundImages || []);
-            setShowFullRanking(false);
+            const payload = await readSelectedFile(event);
+            if (!payload) {
+                return;
+            }
+            const parsed = parseInventoryFile(payload.text);
+            setOriginalDocument(parsed.document);
+            setInventory(parsed.inventory);
+            setInventoryFileName(payload.file.name);
+            applyPlan(parsed.inventory, weights);
         } catch (error) {
-            setStatusText(error.message || "导入失败");
+            window.alert(error.message || "导入库存失败");
         }
     };
 
-    const exportInventory = async () => {
+    const importWeight = async (event) => {
         try {
-            setStatusText("");
-            await requestJson("/api/export", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ inventory, templateDocument: originalDocument }),
-            });
+            const payload = await readSelectedFile(event);
+            if (!payload) {
+                return;
+            }
+            const nextWeights = parseWeightFile(payload.text);
+            setWeights(nextWeights);
+            setWeightFileName(payload.file.name);
+            applyPlan(inventory, nextWeights);
         } catch (error) {
-            setStatusText(error.message || "导出失败");
+            window.alert(error.message || "导入权重失败");
+        }
+    };
+
+    const exportInventory = () => {
+        try {
+            const nextDocument = buildInventoryDocument(inventory, originalDocument);
+            downloadJson(nextDocument, "export.json");
+        } catch (error) {
+            window.alert(error.message || "导出失败");
         }
     };
 
     const resetInventory = () => {
         const nextInventory = {};
-        for (const entry of originalDocument?.items || []) {
-            nextInventory[entry.id] = entry.have;
+        for (const material of materials) {
+            nextInventory[material.id] = 0;
         }
         setInventory(nextInventory);
-        setStatusText("");
+        applyPlan(nextInventory, weights);
     };
 
     const normalizeQuantity = (value) => {
@@ -288,12 +290,8 @@ export default function App() {
         setPendingAction(null);
     };
 
-    const confirmPendingAction = async () => {
-        if (pendingAction === "import") {
-            await reloadInventory();
-        } else if (pendingAction === "export") {
-            await exportInventory();
-        } else if (pendingAction === "reset") {
+    const confirmPendingAction = () => {
+        if (pendingAction === "reset") {
             resetInventory();
         }
         setPendingAction(null);
@@ -303,14 +301,17 @@ export default function App() {
 
     return (
         <div className="page-shell" ref={mouseContainerRef}>
+            <input ref={inventoryInputRef} className="hidden-file-input" type="file" accept=".json,application/json" onChange={importInventory} />
+            <input ref={weightInputRef} className="hidden-file-input" type="file" accept=".json,application/json" onChange={importWeight} />
+
             <div className="background-stage" aria-hidden="true">
                 <div
                     className={`bg-slide ${backgroundState.active === 0 ? "is-active" : ""}`}
-                    style={{ backgroundImage: backgroundImages[backgroundState.indexes[0]] ? `url(${backgroundImages[backgroundState.indexes[0]]})` : "none" }}
+                    style={{ backgroundImage: BACKGROUND_IMAGES[backgroundState.indexes[0]] ? `url(${BACKGROUND_IMAGES[backgroundState.indexes[0]]})` : "none" }}
                 />
                 <div
                     className={`bg-slide ${backgroundState.active === 1 ? "is-active" : ""}`}
-                    style={{ backgroundImage: backgroundImages[backgroundState.indexes[1]] ? `url(${backgroundImages[backgroundState.indexes[1]]})` : "none" }}
+                    style={{ backgroundImage: BACKGROUND_IMAGES[backgroundState.indexes[1]] ? `url(${BACKGROUND_IMAGES[backgroundState.indexes[1]]})` : "none" }}
                 />
                 <div className="bg-overlay" />
             </div>
@@ -321,16 +322,29 @@ export default function App() {
                         <div className="hero-copy">
                             <p className="eyebrow">Arknights Material Balance</p>
                             <h1>明日方舟素材均衡规划器</h1>
+                            <p className="hero-note">
+                                <a href="https://ark.yituliu.cn/material/value" target="_blank" rel="noreferrer">权重下载</a>
+                                <span> · </span>
+                                <a href="https://penguin-stats.io/planner" target="_blank" rel="noreferrer">素材导出</a>
+                                <span> · </span>
+                                <a href="https://github.com/LANSGANBS/Arknights" target="_blank" rel="noreferrer">项目地址</a>
+                            </p>
                         </div>
 
                         <div className="hero-controls">
                             <div className="action-grid">
-                                <LiquidAction mouseContainerRef={mouseContainerRef} onClick={() => openConfirmation("import")}>导入</LiquidAction>
-                                <LiquidAction mouseContainerRef={mouseContainerRef} className="liquid-button--accent" onClick={() => openConfirmation("export")}>导出</LiquidAction>
+                                <LiquidAction mouseContainerRef={mouseContainerRef} onClick={() => inventoryInputRef.current?.click()}>导入库存</LiquidAction>
+                                <LiquidAction mouseContainerRef={mouseContainerRef} onClick={() => weightInputRef.current?.click()}>导入权重</LiquidAction>
+                                <LiquidAction mouseContainerRef={mouseContainerRef} className="liquid-button--accent" onClick={exportInventory}>下载库存</LiquidAction>
                                 <LiquidAction mouseContainerRef={mouseContainerRef} onClick={() => openConfirmation("reset")}>重置</LiquidAction>
                                 <LiquidAction mouseContainerRef={mouseContainerRef} className="liquid-button--primary" onClick={analyze}>计算规划</LiquidAction>
                             </div>
                         </div>
+                    </div>
+
+                    <div className="hero-meta">
+                        <span>库存文件: {inventoryFileName || "未导入"}</span>
+                        <span>权重文件: {weightFileName || "未导入"}</span>
                     </div>
                 </section>
 
@@ -348,9 +362,6 @@ export default function App() {
                         </div>
                     </div>
                 ) : null}
-
-                {statusText ? <div className="status-banner">{statusText}</div> : null}
-
                 <section className="glass-panel glass-panel--section panel-surface">
                     <div className="section-content">
                         <div className="section-header section-header--results">
@@ -359,7 +370,6 @@ export default function App() {
                                     <h2>最缺少的蓝色素材</h2>
                                     <div className="result-links">
                                         <a className="result-link" href="https://ark.yituliu.cn/" target="_blank" rel="noreferrer">掉落推荐关卡</a>
-                                        <a className="result-link" href="https://ark.yituliu.cn/material/value" target="_blank" rel="noreferrer">权重下载</a>
                                     </div>
                                 </div>
                             </div>
@@ -373,9 +383,7 @@ export default function App() {
                         <div className="result-grid">
                             {visibleShortages.map((item) => {
                                 const material = materialMap[item.item_id];
-                                const weighted = activeResult?.hasWeights
-                                    ? item.weighted_equivalent.toFixed(2)
-                                    : "-";
+                                const weighted = activeResult?.hasWeights ? item.weighted_equivalent.toFixed(2) : "-";
 
                                 return (
                                     <article className="result-card" key={item.item_id}>

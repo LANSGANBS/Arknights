@@ -24,6 +24,18 @@ body {
     min-height: 100vh;
 }
 
+.hidden-file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
 .background-stage {
     position: fixed;
     inset: 0;
@@ -132,6 +144,26 @@ body {
     min-width: max-content;
 }
 
+.hero-note {
+    margin: 12px 0 0;
+    max-width: 38rem;
+    color: rgba(245, 247, 248, 0.72);
+    line-height: 1.6;
+}
+
+.hero-note a {
+    color: rgba(220, 239, 231, 0.92);
+    font-weight: 600;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(139, 179, 157, 0.45);
+    padding-bottom: 3px;
+}
+
+.hero-note a:hover {
+    color: #fff;
+    border-bottom-color: rgba(139, 179, 157, 0.8);
+}
+
 .confirm-copy {
     width: fit-content;
     max-width: 100%;
@@ -175,6 +207,17 @@ body {
     flex-wrap: wrap;
     gap: 10px;
     min-width: 0;
+}
+
+.hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    margin-top: 16px;
+    padding: 0 6px;
+    color: rgba(245, 247, 248, 0.68);
+    font-size: 12px;
+    letter-spacing: 0.02em;
 }
 
 .weight-toggle {
@@ -570,21 +613,6 @@ body {
     width: 148px;
 }
 
-.status-banner,
-.output-hint {
-    color: rgba(245, 247, 248, 0.72);
-    font-size: 13px;
-}
-
-.status-banner {
-    padding: 0 6px;
-    color: #ffb0b0;
-}
-
-.output-hint {
-    padding: 0 6px 24px;
-}
-
 @media (max-width: 560px) {
     .hero-content {
         grid-template-columns: 1fr;
@@ -602,6 +630,11 @@ body {
     .hero-controls {
         overflow-x: auto;
         justify-content: flex-start;
+    }
+
+    .hero-meta {
+        flex-direction: column;
+        gap: 8px;
     }
 
     .section-header,
