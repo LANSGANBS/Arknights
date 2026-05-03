@@ -30,5 +30,8 @@ pnpm-debug.log*
 *.log
 *.pid
 
+# Local planning / agent files
+.codewiz/
+
 # Local app output
 data/export.json
