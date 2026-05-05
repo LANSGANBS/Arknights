@@ -9,6 +9,39 @@ export const EMPTY_DOCUMENT = {
 
 const normalizationCache = new Map();
 
+function isPlainObject(value) {
+    return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+function normalizeCount(value) {
+    const parsed = Number.parseInt(value ?? 0, 10);
+    return Number.isNaN(parsed) ? 0 : Math.max(0, parsed);
+}
+
+function convertMaaToPenguinDocument(raw) {
+    const data = raw?.details?.data;
+    if (!isPlainObject(data)) {
+        return null;
+    }
+
+    const items = Object.entries(data)
+        .filter(([itemId]) => MATERIALS[String(itemId).trim()])
+        .map(([itemId, have]) => ({
+            id: String(itemId).trim(),
+            have: normalizeCount(have),
+        }))
+        .sort((left, right) => left.id.localeCompare(right.id));
+
+    if (items.length === 0) {
+        throw new Error("MAA 库存文件中没有识别到可导入的养成材料。");
+    }
+
+    return {
+        ...EMPTY_DOCUMENT,
+        items,
+    };
+}
+
 function cloneJson(value, fallback) {
     if (value == null) {
         return fallback;
@@ -102,17 +135,25 @@ export function documentToInventory(document) {
 
 export function parseInventoryFile(text) {
     const raw = JSON.parse(text);
+    let sourceFormat = "penguin";
+    const maaDocument = !Array.isArray(raw) && isPlainObject(raw) ? convertMaaToPenguinDocument(raw) : null;
+
     const document = Array.isArray(raw)
         ? {
-              ...EMPTY_DOCUMENT,
-              items: raw,
-          }
-        : {
-              "@type": raw?.["@type"] || EMPTY_DOCUMENT["@type"],
-              items: Array.isArray(raw?.items) ? raw.items : [],
-              options: raw?.options && typeof raw.options === "object" ? raw.options : {},
-              excludes: Array.isArray(raw?.excludes) ? raw.excludes : [],
-          };
+            ...EMPTY_DOCUMENT,
+            items: raw,
+        }
+        : maaDocument
+            ? (() => {
+                sourceFormat = "maa";
+                return maaDocument;
+            })()
+            : {
+                "@type": raw?.["@type"] || EMPTY_DOCUMENT["@type"],
+                items: Array.isArray(raw?.items) ? raw.items : [],
+                options: raw?.options && typeof raw.options === "object" ? raw.options : {},
+                excludes: Array.isArray(raw?.excludes) ? raw.excludes : [],
+            };
 
     if (!Array.isArray(document.items)) {
         throw new Error("导入文件必须是 JSON 对象或 items 数组。");
@@ -121,6 +162,7 @@ export function parseInventoryFile(text) {
     return {
         document,
         inventory: documentToInventory(document),
+        sourceFormat,
     };
 }
 

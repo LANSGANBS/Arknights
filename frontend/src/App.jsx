@@ -1,5 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import LiquidGlass from "liquid-glass-react";
+import sampleMaaDocument from "../../data/export_maa.json";
+import samplePenguinDocument from "../../data/export_penguin.json";
 import defaultWeightEntries from "../../data/weight.json";
 import { BACKGROUND_IMAGES, MATERIAL_IMAGE_MAP } from "./assets";
 import { buildInventoryDocument, EMPTY_DOCUMENT, parseInventoryFile, parseWeightEntries, parseWeightFile, planInventory } from "./planner";
@@ -8,11 +10,11 @@ import { BLUE_MATERIAL_IDS, MATERIAL_LIST } from "./plannerData";
 const DEFAULT_TOP_N = 5;
 
 const BUTTON_GLASS = {
-    mode: "prominent",
-    blurAmount: 0.075,
-    saturation: 128,
-    displacementScale: 88,
-    aberrationIntensity: 2.1,
+    mode: "shader",
+    blurAmount: 0.06,
+    saturation: 136,
+    displacementScale: 124,
+    aberrationIntensity: 2.8,
     elasticity: 0,
     cornerRadius: 22,
     padding: "0px",
@@ -24,6 +26,21 @@ const CONFIRMATION_COPY = {
         title: "确认重置",
         description: "这会把当前页面上的所有素材数量直接清零。",
         confirmText: "确认重置",
+    },
+};
+
+const INVENTORY_EXAMPLES = {
+    maa: {
+        title: "MAA JSON 示例",
+        description: "这是当前项目内置的 MAA 仓库识别导出示例，导入时会自动过滤无关项并转成内部企鹅物流格式。",
+        content: JSON.stringify(sampleMaaDocument, null, 2),
+        fileName: "export_maa.json",
+    },
+    penguin: {
+        title: "企鹅物流 JSON 示例",
+        description: "这是当前项目内置的企鹅物流规划器库存示例，网页会直接按原格式解析。",
+        content: JSON.stringify(samplePenguinDocument, null, 2),
+        fileName: "export_penguin.json",
     },
 };
 
@@ -41,8 +58,16 @@ function MaterialImage({ material, className }) {
 }
 
 function LiquidAction({ className = "", onClick, children, mouseContainerRef }) {
+    const [isPressed, setIsPressed] = useState(false);
+
     return (
-        <div className={`liquid-button-shell ${className}`.trim()}>
+        <div
+            className={`liquid-button-shell ${className} ${isPressed ? "is-pressed" : ""}`.trim()}
+            onPointerDown={() => setIsPressed(true)}
+            onPointerUp={() => setIsPressed(false)}
+            onPointerLeave={() => setIsPressed(false)}
+            onPointerCancel={() => setIsPressed(false)}
+        >
             <LiquidGlass
                 {...BUTTON_GLASS}
                 mouseContainer={mouseContainerRef}
@@ -80,6 +105,15 @@ function downloadJson(jsonDocument, fileName) {
     URL.revokeObjectURL(url);
 }
 
+function shuffleArray(items) {
+    const nextItems = [...items];
+    for (let index = nextItems.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [nextItems[index], nextItems[swapIndex]] = [nextItems[swapIndex], nextItems[index]];
+    }
+    return nextItems;
+}
+
 export default function App() {
     const mouseContainerRef = useRef(null);
     const inventoryInputRef = useRef(null);
@@ -88,6 +122,7 @@ export default function App() {
 
     const defaultWeights = useMemo(() => parseWeightEntries(defaultWeightEntries), []);
     const initialPlan = useMemo(() => createPlanState({}, defaultWeights), [defaultWeights]);
+    const backgroundSequence = useMemo(() => shuffleArray(BACKGROUND_IMAGES), []);
     const [originalDocument, setOriginalDocument] = useState(EMPTY_DOCUMENT);
     const [inventory, setInventory] = useState({});
     const [weights, setWeights] = useState(defaultWeights);
@@ -99,6 +134,7 @@ export default function App() {
     const [backgroundState, setBackgroundState] = useState({ active: 0, indexes: [0, 0] });
     const [searchText, setSearchText] = useState("");
     const [pendingAction, setPendingAction] = useState(null);
+    const [examplePreviewKey, setExamplePreviewKey] = useState(null);
     const deferredSearchText = useDeferredValue(searchText);
 
     const materials = useMemo(
@@ -107,6 +143,10 @@ export default function App() {
     );
 
     const materialMap = useMemo(() => Object.fromEntries(materials.map((material) => [material.id, material])), [materials]);
+    const hasInventoryValues = useMemo(
+        () => Object.values(inventory).some((value) => Number(value) > 0),
+        [inventory]
+    );
 
     const filteredMaterials = useMemo(() => {
         const keyword = deferredSearchText.trim().toLowerCase();
@@ -118,14 +158,14 @@ export default function App() {
         );
     }, [materials, deferredSearchText]);
 
-    const canExpand = (fullResult?.shortages?.length || 0) > (result?.shortages?.length || 0);
+    const canExpand = hasInventoryValues && (fullResult?.shortages?.length || 0) > (result?.shortages?.length || 0);
     const activeResult = showFullRanking && fullResult ? fullResult : result;
-    const visibleShortages = activeResult?.shortages || [];
+    const visibleShortages = hasInventoryValues ? activeResult?.shortages || [] : [];
 
     useEffect(() => {
         setBackgroundState({ active: 0, indexes: [0, 0] });
         backgroundIndexRef.current = 0;
-        if (BACKGROUND_IMAGES.length === 0) {
+        if (backgroundSequence.length === 0) {
             return undefined;
         }
 
@@ -156,7 +196,7 @@ export default function App() {
             });
 
         const showBackground = async (nextIndex, firstPaint = false) => {
-            const loaded = await preloadImage(BACKGROUND_IMAGES[nextIndex]);
+            const loaded = await preloadImage(backgroundSequence[nextIndex]);
             if (!loaded || cancelled) {
                 return false;
             }
@@ -173,11 +213,11 @@ export default function App() {
         };
 
         const scheduleNext = () => {
-            if (BACKGROUND_IMAGES.length <= 1 || cancelled) {
+            if (backgroundSequence.length <= 1 || cancelled) {
                 return;
             }
             timer = window.setTimeout(async () => {
-                const nextIndex = (backgroundIndexRef.current + 1) % BACKGROUND_IMAGES.length;
+                const nextIndex = (backgroundIndexRef.current + 1) % backgroundSequence.length;
                 const switched = await showBackground(nextIndex);
                 if (switched) {
                     backgroundIndexRef.current = nextIndex;
@@ -199,7 +239,7 @@ export default function App() {
                 window.clearTimeout(timer);
             }
         };
-    }, []);
+    }, [backgroundSequence]);
 
     const applyPlan = (nextInventory, nextWeights) => {
         const nextPlan = createPlanState(nextInventory, nextWeights);
@@ -225,7 +265,7 @@ export default function App() {
             const parsed = parseInventoryFile(payload.text);
             setOriginalDocument(parsed.document);
             setInventory(parsed.inventory);
-            setInventoryFileName(payload.file.name);
+            setInventoryFileName(`${payload.file.name} · ${parsed.sourceFormat === "maa" ? "MAA" : "企鹅物流"}`);
             applyPlan(parsed.inventory, weights);
         } catch (error) {
             window.alert(error.message || "导入库存失败");
@@ -250,7 +290,7 @@ export default function App() {
     const exportInventory = () => {
         try {
             const nextDocument = buildInventoryDocument(inventory, originalDocument);
-            downloadJson(nextDocument, "export.json");
+            downloadJson(nextDocument, "export_penguin.json");
         } catch (error) {
             window.alert(error.message || "导出失败");
         }
@@ -290,6 +330,14 @@ export default function App() {
         setPendingAction(null);
     };
 
+    const openInventoryExample = (exampleKey) => {
+        setExamplePreviewKey(exampleKey);
+    };
+
+    const closeInventoryExample = () => {
+        setExamplePreviewKey(null);
+    };
+
     const confirmPendingAction = () => {
         if (pendingAction === "reset") {
             resetInventory();
@@ -298,6 +346,7 @@ export default function App() {
     };
 
     const pendingCopy = pendingAction ? CONFIRMATION_COPY[pendingAction] : null;
+    const examplePreview = examplePreviewKey ? INVENTORY_EXAMPLES[examplePreviewKey] : null;
 
     return (
         <div className="page-shell" ref={mouseContainerRef}>
@@ -307,11 +356,11 @@ export default function App() {
             <div className="background-stage" aria-hidden="true">
                 <div
                     className={`bg-slide ${backgroundState.active === 0 ? "is-active" : ""}`}
-                    style={{ backgroundImage: BACKGROUND_IMAGES[backgroundState.indexes[0]] ? `url(${BACKGROUND_IMAGES[backgroundState.indexes[0]]})` : "none" }}
+                    style={{ backgroundImage: backgroundSequence[backgroundState.indexes[0]] ? `url(${backgroundSequence[backgroundState.indexes[0]]})` : "none" }}
                 />
                 <div
                     className={`bg-slide ${backgroundState.active === 1 ? "is-active" : ""}`}
-                    style={{ backgroundImage: BACKGROUND_IMAGES[backgroundState.indexes[1]] ? `url(${BACKGROUND_IMAGES[backgroundState.indexes[1]]})` : "none" }}
+                    style={{ backgroundImage: backgroundSequence[backgroundState.indexes[1]] ? `url(${backgroundSequence[backgroundState.indexes[1]]})` : "none" }}
                 />
                 <div className="bg-overlay" />
             </div>
@@ -327,6 +376,12 @@ export default function App() {
                                 <span> · </span>
                                 <a href="https://penguin-stats.io/planner" target="_blank" rel="noreferrer">素材导出</a>
                                 <span> · </span>
+                                <span>支持 </span>
+                                <button type="button" className="hero-note__button" onClick={() => openInventoryExample("maa")}>MAA</button>
+                                <span> / </span>
+                                <button type="button" className="hero-note__button" onClick={() => openInventoryExample("penguin")}>企鹅物流</button>
+                                <span> JSON 自动识别</span>
+                                <span> · </span>
                                 <a href="https://github.com/LANSGANBS/Arknights" target="_blank" rel="noreferrer">项目地址</a>
                             </p>
                         </div>
@@ -341,11 +396,6 @@ export default function App() {
                             </div>
                         </div>
                     </div>
-
-                    <div className="hero-meta">
-                        <span>库存文件: {inventoryFileName || "未导入"}</span>
-                        <span>权重文件: {weightFileName || "未导入"}</span>
-                    </div>
                 </section>
 
                 {pendingCopy ? (
@@ -358,6 +408,23 @@ export default function App() {
                             <div className="confirm-actions">
                                 <LiquidAction mouseContainerRef={mouseContainerRef} onClick={closeConfirmation}>取消</LiquidAction>
                                 <LiquidAction mouseContainerRef={mouseContainerRef} className="liquid-button--primary" onClick={confirmPendingAction}>{pendingCopy.confirmText}</LiquidAction>
+                            </div>
+                        </div>
+                    </div>
+                ) : null}
+                {examplePreview ? (
+                    <div className="confirm-overlay" role="dialog" aria-modal="true">
+                        <div className="confirm-panel panel-surface example-panel">
+                            <div className="confirm-copy">
+                                <h3>{examplePreview.title}</h3>
+                                <p>{examplePreview.description}</p>
+                            </div>
+                            <div className="example-code-wrap">
+                                <div className="example-code-meta">{examplePreview.fileName}</div>
+                                <pre className="example-code-block">{examplePreview.content}</pre>
+                            </div>
+                            <div className="confirm-actions">
+                                <LiquidAction mouseContainerRef={mouseContainerRef} onClick={closeInventoryExample}>关闭</LiquidAction>
                             </div>
                         </div>
                     </div>
@@ -380,35 +447,37 @@ export default function App() {
                             ) : null}
                         </div>
 
-                        <div className="result-grid">
-                            {visibleShortages.map((item) => {
-                                const material = materialMap[item.item_id];
-                                const weighted = activeResult?.hasWeights ? item.weighted_equivalent.toFixed(2) : "-";
+                        {visibleShortages.length > 0 ? (
+                            <div className="result-grid">
+                                {visibleShortages.map((item) => {
+                                    const material = materialMap[item.item_id];
+                                    const weighted = activeResult?.hasWeights ? item.weighted_equivalent.toFixed(2) : "-";
 
-                                return (
-                                    <article className="result-card" key={item.item_id}>
-                                        <span className="result-rank">#{item.rank}</span>
-                                        <div className="result-card__head">
-                                            <MaterialImage material={material || { name: item.name }} className="result-icon" />
-                                            <div>
-                                                <strong>{material?.name || item.name}</strong>
-                                                <span>{item.item_id}</span>
+                                    return (
+                                        <article className="result-card" key={item.item_id}>
+                                            <span className="result-rank">#{item.rank}</span>
+                                            <div className="result-card__head">
+                                                <MaterialImage material={material || { name: item.name }} className="result-icon" />
+                                                <div>
+                                                    <strong>{material?.name || item.name}</strong>
+                                                    <span>{item.item_id}</span>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <dl className="result-metrics">
-                                            <div>
-                                                <dt>蓝材等效</dt>
-                                                <dd>{item.blue_equivalent.toFixed(2)}</dd>
-                                            </div>
-                                            <div>
-                                                <dt>加权后</dt>
-                                                <dd>{weighted}</dd>
-                                            </div>
-                                        </dl>
-                                    </article>
-                                );
-                            })}
-                        </div>
+                                            <dl className="result-metrics">
+                                                <div>
+                                                    <dt>等效数量</dt>
+                                                    <dd>{item.blue_equivalent.toFixed(2)}</dd>
+                                                </div>
+                                                <div>
+                                                    <dt>加权数量</dt>
+                                                    <dd>{weighted}</dd>
+                                                </div>
+                                            </dl>
+                                        </article>
+                                    );
+                                })}
+                            </div>
+                        ) : null}
                     </div>
                 </section>
 

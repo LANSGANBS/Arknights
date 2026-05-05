@@ -34,4 +34,4 @@ pnpm-debug.log*
 .codewiz/
 
 # Local app output
-data/export.json
+data/export_*.json

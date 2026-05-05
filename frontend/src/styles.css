@@ -24,18 +24,6 @@ body {
     min-height: 100vh;
 }
 
-.hidden-file-input {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-}
-
 .background-stage {
     position: fixed;
     inset: 0;
@@ -151,19 +139,6 @@ body {
     line-height: 1.6;
 }
 
-.hero-note a {
-    color: rgba(220, 239, 231, 0.92);
-    font-weight: 600;
-    text-decoration: none;
-    border-bottom: 1px solid rgba(139, 179, 157, 0.45);
-    padding-bottom: 3px;
-}
-
-.hero-note a:hover {
-    color: #fff;
-    border-bottom-color: rgba(139, 179, 157, 0.8);
-}
-
 .confirm-copy {
     width: fit-content;
     max-width: 100%;
@@ -174,6 +149,32 @@ body {
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.08),
         0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+.hero-note a,
+.hero-note__button {
+    color: rgba(220, 239, 231, 0.92);
+    font-weight: 600;
+    text-decoration: none;
+    border-bottom: 1px solid rgba(139, 179, 157, 0.45);
+    padding: 0 0 3px;
+}
+
+.hero-note__button {
+    appearance: none;
+    -webkit-appearance: none;
+    background: none;
+    border-top: 0;
+    border-left: 0;
+    border-right: 0;
+    cursor: pointer;
+    font: inherit;
+}
+
+.hero-note a:hover,
+.hero-note__button:hover {
+    color: #fff;
+    border-bottom-color: rgba(139, 179, 157, 0.8);
 }
 
 .eyebrow {
@@ -207,17 +208,6 @@ body {
     flex-wrap: wrap;
     gap: 10px;
     min-width: 0;
-}
-
-.hero-meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px 20px;
-    margin-top: 16px;
-    padding: 0 6px;
-    color: rgba(245, 247, 248, 0.68);
-    font-size: 12px;
-    letter-spacing: 0.02em;
 }
 
 .weight-toggle {
@@ -307,6 +297,27 @@ body {
     position: relative;
     isolation: isolate;
     transform: none !important;
+}
+
+.liquid-button .glass,
+.liquid-button__inner {
+    transition:
+        filter 140ms ease,
+        transform 140ms ease,
+        opacity 140ms ease;
+}
+
+.liquid-button-shell.is-pressed .glass,
+.liquid-button-shell:active .glass,
+.liquid-button:active .glass {
+    filter: brightness(0.82) saturate(0.92);
+}
+
+.liquid-button-shell.is-pressed .liquid-button__inner,
+.liquid-button-shell:active .liquid-button__inner,
+.liquid-button:active .liquid-button__inner {
+    transform: translateY(1px);
+    opacity: 0.9;
 }
 
 .liquid-button .glass {
@@ -476,7 +487,7 @@ body {
 
 .result-metrics {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
     margin: 0;
 }
@@ -613,6 +624,49 @@ body {
     width: 148px;
 }
 
+.example-panel {
+    width: min(100%, 920px);
+}
+
+.example-code-wrap {
+    display: grid;
+    gap: 10px;
+}
+
+.example-code-meta {
+    color: rgba(245, 247, 248, 0.58);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+}
+
+.example-code-block {
+    margin: 0;
+    max-height: min(60vh, 680px);
+    overflow: auto;
+    padding: 16px 18px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(6, 8, 9, 0.72);
+    color: rgba(233, 241, 237, 0.94);
+    font: 12px/1.6 SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+    white-space: pre;
+}
+
+.status-banner,
+.output-hint {
+    color: rgba(245, 247, 248, 0.72);
+    font-size: 13px;
+}
+
+.status-banner {
+    padding: 0 6px;
+    color: #ffb0b0;
+}
+
+.output-hint {
+    padding: 0 6px 24px;
+}
+
 @media (max-width: 560px) {
     .hero-content {
         grid-template-columns: 1fr;
@@ -629,23 +683,7 @@ body {
 
     .hero-controls {
         overflow-x: auto;
-        justify-content: flex-start;
-    }
-
-    .hero-meta {
-        flex-direction: column;
-        gap: 8px;
-    }
-
-    .section-header,
-    .section-header--inventory {
-        flex-direction: column;
-        align-items: stretch;
-    }
-
-    .search-input,
-    .liquid-button--toggle {
-        max-width: none;
+        justify-content: flex-stidth: none;
         width: 100%;
     }
 }
