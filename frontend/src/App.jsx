@@ -1,9 +1,8 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import LiquidGlass from "liquid-glass-react";
-import sampleMaaDocument from "../../data/export_maa.json";
-import samplePenguinDocument from "../../data/export_penguin.json";
 import defaultWeightEntries from "../../data/weight.json";
 import { BACKGROUND_IMAGES, MATERIAL_IMAGE_MAP } from "./assets";
+import { sampleMaaDocument, samplePenguinDocument } from "./inventoryExamples";
 import { buildInventoryDocument, EMPTY_DOCUMENT, parseInventoryFile, parseWeightEntries, parseWeightFile, planInventory } from "./planner";
 import { BLUE_MATERIAL_IDS, MATERIAL_LIST } from "./plannerData";
 
